@@ -7,3 +7,5 @@ This project aims to use simple linear regression to see how well we can predict
 ## HTML of the project
 
 you can look at this HTML to get a nice summary of the porject and the steps to ocmplete it and it's proper analysis
+
+https://notkobe.github.io/SLR-on-18-19-NBA-season/project-2.html#1_introduction
