@@ -1,0 +1,408 @@
+---
+title: "Project 2: Simple Linear Regression on an NBA season"
+author: "Alberto Liu"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output:  
+  html_document:
+    code_folding: show
+    csl: biomed-central.csl
+    df_print: paged
+    fig_caption: yes
+    fig_height: 6
+    fig_width: 7
+    number_sections: true
+    theme: cosmo
+    toc: yes
+    toc_float: yes
+    highlight: kate
+  pdf_document:
+    df_print: kable
+    fig_caption: yes
+    fig_height: 6
+    fig_width: 7
+    highlight: kate
+    toc: yes
+    toc_depth: 4
+  word_document:
+    toc: yes
+    toc_depth: 4
+bibliography: Primo_BibTex_Export.bib
+abstract: This project is all about applications of SLR to real data using R. I will be using a dataset from the 2018-2019 NBA season that will have certain stats from the 30 teams in the NBA. The 
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,comment = "AL$")
+```
+
+<center>
+![Alberto Liu](Alberto.Liu.jpg){ width=30% }
+</center>
+
+
+
+# Introduction
+
+The National Basketall Association (NBA) is the premier basketball league where top players from around the world compete for regional teams spread out in the USA and Toronto to play for the title of world champion each year. Even though the teams don't change that much, each season is different from the one before which draws in millions of viewers every year to watch along to see who will stand on top of the league.
+
+<center>
+![NBA logo](nba_logo.jpg "https://turbologo.com/articles/nba-logo/"){ width=30% }
+</center>
+
+## Why I am interested in the data
+
+Besides my big interest in basketball, I am very interested in the data because I one day hope to become a data scientist and work for one of the NBA teams and help them win a championship. I want to look at data to help guide a team to use quantative methods to help train and compete for the championship. Each team is different, but they all have want to be the ones lifting the trophy by the end, and I want to be part of.
+
+## The Data Itself
+
+The data is from Basketball Reference, the offical reference partnered with NBA using real time stats of all teams, players and organizations. The data is collected over the 82 games during the regualr season. More specificly, I will be examining the 2018-2019 NBA season where the Toronto Raptors won the championship.
+
+<center>
+![ The Toronto Raptors holding the trophy ](trophy_lift.jpg "https://www.google.com/url?sa=i&url=https%3A%2F%2Fhypebeast.com%2F2019%2F6%2Ftoronto-raptors-defeat-golden-state-warriors-2019-nba-champions&psig=AOvVaw1syFw6U39pt4vAHe1Xgoym&ust=1587574754801000&source=images&cd=vfe&ved=0CAkQjhxqFwoTCKCikOD_-egCFQAAAAAdAAAAABAI"){ width=50% }
+
+</center>
+
+### What are the variables?
+
+The variables are:
+
+**Team**: the data that will represent 1 of 30 teams in the NBA
+
+**Playoffs**: wheter or not the team will attend the 2018-2019 playoffs 
+
+**W**: the amount of wins in the season
+
+**PTS**: total points scored in the season
+
+**oppPTS**: total points scored by all opponents during the season
+
+**TRB**: total rebounds by a team over the season
+
+**opTRB**: total rebounds by opponent of team over the season
+
+**AST**: total assists made by a team 
+
+**oppAST**: total assits made by all opponents
+
+This can be more clearly seen in the code below
+```{r}
+nba = read.csv("NBA_test.csv", header = T) #reading in the data
+head(nba)
+```
+
+
+```{r}
+library(DT)
+data(nba) #setting data equal to what we read in
+datatable(         #using the example in the html document on canvas
+  nba,filter = 'top', options = list(
+  pageLength = 5, autoWidth = TRUE, editable = TRUE, dom = 'Bfrtip',
+    buttons = c('copy', 'csv', 'excel', 'pdf', 'print')),
+caption = htmltools::tags$caption(
+    style = 'caption-side: bottom; text-align: center;',
+    'Table 2: ', htmltools::em('stats for all 30 teams in the NBA.')
+  )
+) %>%
+  formatStyle('W',  color = 'red', backgroundColor = 'blue', fontWeight = 'bold')
+```
+
+### How was the data collected?
+
+The data was collected by taking the total number of points scored by a team each game along with the total number of points scored by their opponent and the victor of the game. Then they are all summed up at the end of the season (82 games) to get point totals. The rebounds and asists variables were collected the same way and over 82 games just like the points. If a team does advance onto the playoffs, it is denoted by a **1** in the data table, and a **0** else. 
+
+## What problem do I want to solve?
+
+I want to look at 3 stats that can be collected in a basketball game (points, rebounds and asists) and see which stat can best predict how many wins a team will have by the end of the season, and ultimatly if that team will qualify for the playoffs.
+
+The three stats can be seen in game with the examples below:
+
+<center>
+![ Jeremy Lin scoring 3 **points** ](Jeremy_points.gif){ width=50% }
+
+![ Russel Westbrook grabbing a **rebound** ](russel_rebound.gif){ width=50% }[@rebound]
+
+![ An **assist** to LeBron James ](Lebron_assist.gif){ width=50% }
+
+</center>
+
+## Plot Data
+
+First, lets plot our data to see what variable will give is the most linear line with the closest points to the line. We will calculate the difference of each stat per team. Meaning that we will take the total stat of a team - total stat against all opponents to see how they faired against the league during the 82 games.[@Ajmera]
+
+$stat.diff = team_{stat} - opponent_{stat}$
+
+we will repeat this 3 times for points, rebounds and asists.
+
+```{r}
+library(ggplot2)
+nba$point_diff = nba$PTS - nba$oppPTS
+g = ggplot(nba, aes(x = nba$point_diff, y = W, color = nba$Playoffs), main = "POINT DIFFERENCE") + geom_point()
+g = g + geom_smooth(method = "loess")
+g
+```
+
+From the graph above, we can see a very high linear correlation between the point difference and the number of wins along if a team will make the playoffs. Meaning if a team has a higher point difference (meaning they score more points than their opponent) then the team is *more* likely to advance to the playoffs.
+
+```{r}
+nba$rb.diff = nba$TRB-nba$oppTRB
+library(ggplot2)
+g = ggplot(nba, aes(x = nba$rb.diff, y = W, color = nba$Playoffs)) + geom_point()
+g = g + geom_smooth(method = "loess")
+g
+```
+
+Although there seems to be some sort of correlation, it is not as good as the point difference that was graphed before it.
+
+```{r}
+nba$ast.diff = nba$AST - nba$oppAST
+library(ggplot2)
+g = ggplot(nba, aes(x = nba$ast.diff, y = W, color = nba$Playoffs)) + geom_point()
+g = g + geom_smooth(method = "loess")
+g
+```
+
+Again, although the plot seems to be a positive linear relation, the points are very far from the best fit line.
+
+Ultimatly from these models, we can see that the **difference of points** is the best estimate to see the ammount of wins a team will have and whether or not they make the playoffs.
+
+# The Theory behind Simple Linear Regression
+
+  I think that the relationship between wins (our dependent variable **Y**) and the difference points (our independent variable **X**) follows a linear model. To make an accurate model to display the relationship, I will be using the theory of simple linear regression (SLR).
+  
+  One of the main ideas of SLR is that $\bar Y$(mean value of Y) for any $X_i$ value will make a straight line when plotted. Any errors that fall below/above the plotted line will be denoted as $\epsilon$. The formula for SLR can be derived as:
+  $\hat Y_i = \hat\beta_0+\hat\beta_1*X_i+\epsilon_i$ for an estimate and
+  $Y = \beta_0 + \beta_1*X_1+\epsilon$ for the whole data [@Mirman]
+  
+  $\beta_0$ is the Y intercept of our model and $\beta_1$ is the slope of the model and two of our random variables.
+  
+1. The mean of the probability distribution of $\epsilon = 0$
+   
+2. Variance of the probability distribution of $\epsilon$ is constant of each X.(meaning $\epsilon $ has a constant variance for all X)
+   
+3. $\epsilon$ ~ Normal
+   
+4. $\epsilon$  is independitly idetically distributed, meaning the errors are all independent of each other. 
+  -Since our data is not a time series, we know that the data is independent because each game is **INDEPENDENT** from the other games and each game is random, we do not know who is going to win. [@oustat] [@Sheather]
+  
+## Doing the regression and getting our formula
+
+In order to figure out what $\beta_0$ & $\beta_1$, I will be using the method of least squares like in the lab 3 and 4. To acomplish this, I need to find the sum that will result in the smallest summation of the errors, which will give me the line of best fit in the process.
+
+```{r}
+nba.lm=lm(W~point_diff,data=nba)
+summary(nba.lm)
+```
+Since the |min| $\approx$ |max| and median is close to 0, that means we have a good fit for the data.
+
+We also obtain the following values for $\beta_0$ and $\beta_1$
+
+$\hat \beta_0$ = 41.079025
+$\hat \beta_1$ = 0.029635
+
+### Results of Doing Least Squares
+
+$\hat \beta_0 + \hat \beta_1 =$ 41.079025 + 0.029635*$x_i$
+
+This formula implies that each *Win* changes when the point difference by 0.029635 per point difference.
+
+### Using ciReq() to find the 95% confidence interval of our estimates 
+
+```{r}
+library(s20x)
+
+ciReg(nba.lm, conf.level = .95)
+```
+We see that a 95% confidence interval will be from (40.14235, 42.01570) for $\beta_o$
+
+We see that a 95% confidence interval will be from (0.02724, 0.03203) for $\beta_1$
+
+Since both of the estimates of $\beta_0$ & $\beta_1$ are within their respective confidence intervals, we will deem the NULL hypothesis as plausible.
+
+
+### Plotting RSS, the Residuals
+
+Plotting the residuals defined as $y-\hat y$ and $\sum(Y_i - \hat Y_i)^2$ for all of them added together, This will result in the RSS, or the residual sum of squares.
+
+```{r}
+plot(W~point_diff,bg="Blue",pch=21,cex=1.2,
+              ylim=c(10,1.1*max(W)),
+              main="Residual Line Segments of Wins vs Point difference", data=nba)
+ht.lm=with(nba, lm(W~point_diff))     # Code taken from lab 3 and modified
+abline(nba.lm)
+yhat=with(nba,predict(ht.lm,data.frame(point_diff)))
+with(nba,{segments(point_diff,W,point_diff,yhat)})
+abline(ht.lm)
+```
+
+
+### Plotting MSS, the Means
+
+Now we will be doing a plot that will graph the *means of wins vs the means of point differences*, all the means together can be expressed as: 
+$\sum (\hat y_i - \bar Y)^2$ to represent the distance.
+
+```{r}
+plot(W~point_diff,bg="Blue",pch=21,cex=1.2,
+             ylim=c(0,1.1*max(W)),
+             main="Mean of Wins vs Point difference", data=nba)
+abline(nba.lm)
+with(nba, abline(h=mean(W)))           #Code taken from lab 3 and modified
+abline(nba.lm)
+with(nba, segments(point_diff,mean(W),point_diff,yhat,col="Red"))
+```
+
+### Plotting TTS, combining mean and residuals
+
+*TSS = MSS + RSS*
+When we comine the mean and the residuals, this will show the total deviation line segments ($\hat Y = \bar Y$) and result in the **Total Sum of Squares** 
+
+```{r}
+plot(W~point_diff,bg="Blue",pch=21,cex=1.2,
+              ylim=c(0,1.1*max(W)),
+              main="Total Deviation Line Segments of W vs Point difference", data=nba)
+with(nba,abline(h=mean(W)))
+with(nba, segments(point_diff,W,point_diff,mean(W),col="Green"))
+```
+
+#### Getting RSS,MSS and TSS values and interpretation.
+
+RSS
+
+```{r}
+RSS.calc=with(nba,sum((W-yhat)^2))
+RSS.calc
+```
+MSS
+
+```{r}
+MSS.calc=with(nba,sum((yhat-mean(W))^2))
+MSS.calc
+```
+
+TSS
+
+```{r}
+TSS.calc=with(nba,sum((W-mean(W))^2))
+TSS.calc
+```
+
+MSS/TSS
+```{r}
+MSS.calc/TSS.calc
+```
+Since the value of MSS/TSS is $\approx$ 1, we know we have a good fit for the model.
+
+MSS + RSS
+
+```{r}
+MSS.calc+RSS.calc
+TSS.calc
+```
+We confirm that TSS= MSS + RSS meaning our numbers seem to make since.
+
+
+# Validity with mathematical expressions
+
+## Straight Trend line
+
+I will again just use a simple plot() to show that a linear model is a good fit for the data
+```{r}
+
+nba.lm=lm(W~point_diff,data=nba)
+plot(nba$W~nba$point_diff,bg = "blue",pch=21,cex=1.2,
+     ylim=c(0,1.1*max(nba$W)),
+     main="Scatter Plot and Fitted Line of Wins vs Point difference", data=nba,lwd = 2)
+abline(nba.lm)
+```
+
+We see that a simple scatter plot of the point differences point to a line to be a good fit for the data. But how good of a fit is the line? Further in the document I will do calculations to see how well this straight line represents our data.
+
+
+## Using trendscatter()
+
+```{r}
+library(s20x)
+trendscatter(W~point_diff, f = 0.5, data = nba, main="Wins vs point difference scatterplot")
+```
+As we can see, it is again a linear trend with the dashed red lines showing us the errors and the blue line representing our line of best fit.
+
+## Checking $\epsilon$ ~ Normal
+
+As we saw before when we were doing our confidence intervals for our estimates for $\beta_0$ &$ \beta_1$ our estimates were inside our interval.
+
+### Shapiro-Wilk test
+
+```{r}
+normcheck(nba.lm,shapiro.wilk = T)
+```
+As we can see the P value is 0.859, this would mean we don't have enough evidence to reject our null hypothesis that $\epsilon$ ~ Normal(0, $\sigma^2$).
+
+### Constant variance 
+
+
+### Residuals vs Point difference
+
+```{r}
+nba.res = residuals(nba.lm)
+nba.fit = fitted(nba.lm)
+
+plot(nba$point_diff,nba.res, xlab="Point Difference",ylab="Residuals", main="Residuals vs Residuals")
+
+```
+
+There seems to be some symetry about Residuals = 0, but it is very rough at best. This means that there is not signifigant deviation from the line of best fit.
+
+### Residuals vs Fitted
+
+```{r}
+trendscatter(nba.res~nba.fit, f = 0.5, data = nba.lm, xlab="Fitted Values",ylab="Residuals", main="Residual vs Fitted Value")
+```
+
+The lines show threr is a very loose symmetry about 0, implying a linear model is a decent fit for the data.
+
+
+## Using predict 
+
+```{r}
+predict.wins = predict(nba.lm, data.frame(point_diff=c(-100,0,200)))
+predict.wins
+```
+We we can see from the predict() function. If a team has -100 point difference (meaning that opponents scored a total of 100 points MORE than a team) they're predicted to win 38 games.
+
+If a team has 0 point difference, meaning a team scored as many points as all the opponents scored against that team, they are predicted to win 41 games.
+
+Finally, if a team has a 200 point difference, then that team is predicted to have 47 wins in the season.
+
+
+## Using cooks distsance to check for outliers
+
+We must check for outliers to see if they are affecting the interpretation of our data. We can do this with cooks distance, which will look at our data and see how much impact they have in the data set. [ @Gao ]
+
+```{r}
+cooks20x(nba.lm)
+```
+We see that 7, 17 and 29 have a major impact on our data with their large distance value. if we remove those values, then we can get a much better interpretation.
+
+```{r}
+nba_new.lm=lm(W~point_diff, data=nba[-c(7,17,29),])
+summary(nba_new.lm)
+summary(nba.lm)
+```
+We can see that our standard error for $\beta_1$ improved a little bit, going from 0.001171 -> 0.001128 , what is more intersting is our standard error for $\beta_0$ greatly improved going from 0.457269 -> 0.426246.
+
+
+# Conclusion
+
+The NBA is one of the most exciting sport leagues to watch due to the great skills of players and the unpredictability of what will happen each season. However with the power of statistics, we are able to predict some out comes given the right amount of data. 
+
+## Answer to research question
+
+Looking at the **difference of points** is the most accurate way of determining how many wins a team is expected to reach in a reagular 82 game season. The data seems to answer the question of *how many wins will a team have, and will they make the playoffs* very presicely! In the 2018-2019 NBA season, the lowest amount of wins a team needed to advance to the playoffs was the Detroit Pistons **41** wins. our model predicted that the *base* amount of wins a team will have will be **41**. Then depending on the difference of points a team will have, we can add/subtract that from the base amount of wins and see how the teams stack up against each other and if they will advance to the playoffs. 
+
+## How to improve experiment 
+
+When we invoked the function to look at the Cook's distance, we saw some big outliers that swayed our data. This may be caused due to the league spliting up the NBA league into 2 conferences (West and East). Because of the division, one conference may be tougher than the other from year to year. When a stronger conference players a weaker conference it will obviously sway the data more to the strong conference because they are more likely to win against their weaker opponents. For example in the 2018-2019 NBA season, for the eastern conference, the minimum number of wins needed to advance to the playoffs was 41, but for the western conference, the minimum wins a team needed was **TIED** by the Los Angeles Clippers and San Antinio Spurs with **48** wins.
+
+A way we can maybe over come this is to look at data from only one conference so it will not be biased. However if we do that, we will cut our sample size in half, going from 30 -> 15. So to make sure we have a sufficient sample size, I would suggest that we look at multiple seasons from a conference. 
+
+# References
+
+
